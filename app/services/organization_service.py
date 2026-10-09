@@ -165,8 +165,6 @@ async def create_organization_from_db(org_in: OrganizationCreate) -> Optional[Or
             
         return organization
         
-        return organization
-        
     except psycopg2.Error as e:
         print(f"❌ PostgreSQL Error: {e}")
         import traceback
