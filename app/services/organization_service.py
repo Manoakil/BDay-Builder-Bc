@@ -116,8 +116,11 @@ async def create_organization_from_db(org_in: OrganizationCreate) -> Optional[Or
                 print(f"✅ Profile exists for user {org_in.created_by}")
         
         # Now create organization
+        import json
         org_data = org_in.model_dump(mode="json")
         org_data["secret_code"] = secrets.token_urlsafe(6).upper()
+        if "address" in org_data and isinstance(org_data["address"], dict):
+            org_data["address"] = json.dumps(org_data["address"])
         print(f"📦 Org data: {org_data}")
         
         with _connection() as connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:
