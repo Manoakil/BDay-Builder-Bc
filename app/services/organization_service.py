@@ -206,7 +206,8 @@ async def update_organization(supabase: Client, org_id: UUID, org_in: Organizati
 async def delete_organization(supabase: Client, org_id: UUID) -> bool:
     """Delete organization (soft delete)"""
     try:
-        response = supabase.from_('organizations').delete().eq('id', str(org_id)).execute()
+        from datetime import datetime
+        response = supabase.from_('organizations').update({'deleted_at': datetime.now().isoformat(), 'status': 'deleted'}).eq('id', str(org_id)).execute()
         return len(response.data) > 0
     except Exception as e:
         print(f"Error deleting organization: {e}")
@@ -216,7 +217,7 @@ async def delete_organization(supabase: Client, org_id: UUID) -> bool:
 async def get_all_organizations(supabase: Client) -> List[Organization]:
     """Get all organizations"""
     try:
-        response = supabase.from_('organizations').select('*').order('created_at').execute()
+        response = supabase.from_('organizations').select('*').is_('deleted_at', 'null').order('created_at').execute()
         if response.data:
             return [Organization.model_validate(item) for item in response.data]
         return []
@@ -269,7 +270,7 @@ async def get_organizations_by_user(supabase: Client, user_id: UUID) -> List[Org
         org_ids = [m['organization_id'] for m in (memberships.data or []) if 'organization_id' in m]
         if not org_ids:
             return []
-        response = supabase.from_('organizations').select('*').in_('id', org_ids).execute()
+        response = supabase.from_('organizations').select('*').in_('id', org_ids).is_('deleted_at', 'null').execute()
         if response.data:
             return [Organization.model_validate(item) for item in response.data]
         return []
