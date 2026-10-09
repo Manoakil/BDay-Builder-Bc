@@ -57,6 +57,34 @@ async def register_with_secret_code(
     # 2. Allowed roles via this route: wisher, bday_person, org_admin
     if data.role not in (MemberRole.wisher, MemberRole.bday_person, MemberRole.org_admin):
         raise HTTPException(status_code=400, detail="Invalid role for this registration method")
+        
+    # Check if organization has an approved org_admin or super_admin
+    if data.role in (MemberRole.wisher, MemberRole.bday_person):
+        admins_resp = supabase.from_('organization_members') \
+            .select('user_id') \
+            .eq('organization_id', org_id) \
+            .in_('role', ['org_admin', 'super_admin']) \
+            .is_('deleted_at', 'null') \
+            .execute()
+            
+        if not admins_resp.data:
+            raise HTTPException(
+                status_code=400, 
+                detail="This organization is not yet active. Please wait for an Organization Admin to set it up."
+            )
+            
+        admin_ids = [m['user_id'] for m in admins_resp.data]
+        profiles_resp = supabase.from_('profiles') \
+            .select('id') \
+            .in_('id', admin_ids) \
+            .eq('approval_status', 'approved') \
+            .execute()
+            
+        if not profiles_resp.data:
+            raise HTTPException(
+                status_code=400,
+                detail="This organization is not yet active. Please wait for an Organization Admin to be approved."
+            )
 
     duplicate_field = organization_service.registration_identity_exists(data.email)
     if duplicate_field:
