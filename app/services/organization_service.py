@@ -165,18 +165,18 @@ async def create_organization_from_db(org_in: OrganizationCreate) -> Optional[Or
             
         return organization
         
+        return organization
+        
     except psycopg2.Error as e:
         print(f"❌ PostgreSQL Error: {e}")
-        print(f"Error Code: {e.pgcode}")
-        print(f"Error Message: {e.pgerror}")
         import traceback
         traceback.print_exc()
-        return None
+        raise e
     except Exception as e:
         print(f"❌ Error creating organization from DB: {e}")
         import traceback
         traceback.print_exc()
-        return None
+        raise e
 
 
 async def get_organization_by_id(supabase: Client, org_id: UUID) -> Optional[Organization]:
