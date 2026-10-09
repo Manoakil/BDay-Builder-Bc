@@ -23,4 +23,14 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=str(ENV_FILE))
 
-settings = Settings()
+try:
+    settings = Settings()
+except Exception as e:
+    import sys
+    print("=" * 60)
+    print("❌ FATAL ERROR: Missing or Invalid Environment Variables!")
+    print("Please make sure you have configured all required variables")
+    print("such as DATABASE_URL, SUPABASE_URL, etc.")
+    print(f"Details: {e}")
+    print("=" * 60)
+    sys.exit(1)
