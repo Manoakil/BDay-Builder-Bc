@@ -128,6 +128,17 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if user.approval_status == 'pending':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is pending approval by an administrator."
+        )
+    elif user.approval_status == 'rejected':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Your account request was rejected. Reason: {user.rejection_reason or 'No reason provided.'}"
+        )
+
     # Use effective role resolved during authentication
     role_slug = user.role_slug or "viewer"
 
