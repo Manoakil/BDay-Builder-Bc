@@ -42,10 +42,15 @@ async def create_secret_vault(
 ) -> Any:
     await _require_vault_manager(supabase, current_user, vault_in.event_id)
     vault_in.created_by = current_user.id
-    vault = await vault_service.create_secret_vault(supabase, vault_in)
-    if not vault:
-        raise HTTPException(status_code=400, detail="Secret Vault creation failed")
-    return vault
+    try:
+        vault = await vault_service.create_secret_vault(supabase, vault_in)
+        if not vault:
+            raise HTTPException(status_code=400, detail="Secret Vault creation failed (no data returned)")
+        return vault
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Secret Vault creation failed: {str(e)}")
 
 
 @router.get("/{event_id}/manage", response_model=SecretVault)
@@ -72,10 +77,15 @@ async def update_secret_vault(
     if not vault:
         raise HTTPException(status_code=404, detail="Secret Vault not found")
     await _require_vault_manager(supabase, current_user, vault.event_id)
-    updated = await vault_service.update_secret_vault(supabase, vault_id, vault_in)
-    if not updated:
-        raise HTTPException(status_code=400, detail="Vault update failed")
-    return updated
+    try:
+        updated = await vault_service.update_secret_vault(supabase, vault_id, vault_in)
+        if not updated:
+            raise HTTPException(status_code=400, detail="Vault update failed (no data returned)")
+        return updated
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Vault update failed: {str(e)}")
 
 @router.get("/{event_id}", response_model=SecretVaultPublic)
 async def get_secret_vault_for_event(

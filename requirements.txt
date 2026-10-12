@@ -7,5 +7,6 @@ supabase
 pydantic[email]
 pydantic-settings
 passlib[bcrypt]
+bcrypt
 python-jose[cryptography]
 python-multipart

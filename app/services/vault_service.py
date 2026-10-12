@@ -8,6 +8,11 @@ from app.schemas.vault import SecretVault, SecretVaultCreate, SecretVaultUpdate,
 from app.utils.security import get_password_hash # Assuming get_password_hash is used for vault answers
 
 async def create_secret_vault(supabase: Client, vault_in: SecretVaultCreate) -> Optional[SecretVault]:
+    # If a vault already exists for this event, return it idempotently
+    existing = await get_secret_vault_by_event_id(supabase, vault_in.event_id)
+    if existing:
+        return existing
+
     try:
         # Hash the answer before storing it
         vault_in.answer_hash = get_password_hash(vault_in.answer_hash)
@@ -16,8 +21,10 @@ async def create_secret_vault(supabase: Client, vault_in: SecretVaultCreate) -> 
             return SecretVault.model_validate(response.data[0])
         return None
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error creating secret vault: {e}")
-        return None
+        raise e
 
 async def get_secret_vault_by_event_id(supabase: Client, event_id: UUID) -> Optional[SecretVault]:
     try:
@@ -49,8 +56,10 @@ async def update_secret_vault(supabase: Client, vault_id: UUID, vault_in: Secret
             return SecretVault.model_validate(response.data[0])
         return None
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error updating secret vault: {e}")
-        return None
+        raise e
 
 async def record_vault_attempt(supabase: Client, attempt_in: VaultAttemptCreate) -> Optional[VaultAttempt]:
     try:
