@@ -63,5 +63,5 @@ class PackageBuilder:
             "event": event_schema,
             "wishes": wishes_data,
             "timeline": timeline_data,
-            "vault": vault_data
+            "vault": None
         }

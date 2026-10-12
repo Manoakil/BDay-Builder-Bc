@@ -1,4 +1,4 @@
-from typing import Generator
+from typing import Generator, Optional, Any
 from types import SimpleNamespace
 from uuid import UUID
 import psycopg2
@@ -54,8 +54,8 @@ async def get_current_user(
 oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
 
 async def get_optional_current_user(
-    token: str | None = Depends(oauth2_scheme_optional)
-) -> Any | None:
+    token: Optional[str] = Depends(oauth2_scheme_optional)
+) -> Optional[Any]:
     if not token:
         return None
     try:

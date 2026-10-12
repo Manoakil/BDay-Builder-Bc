@@ -3,7 +3,6 @@ from typing import Optional
 from uuid import UUID
 
 from jose import jwt, JWTError
-from passlib.context import CryptContext
 from supabase import Client
 from app.config import settings
 from app.schemas.user import UserCreate, User
