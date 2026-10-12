@@ -1,0 +1,15 @@
+{
+  "short_name": "Wish Land",
+  "name": "Velora Studio Birthday Builder",
+  "icons": [
+    {
+      "src": "icons8-birthday-pastel_glyph-96.png",
+      "sizes": "96x96",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#FF4D8D",
+  "background_color": "#ffffff"
+}

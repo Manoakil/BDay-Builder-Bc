@@ -14,12 +14,33 @@ class AssetCollector:
 
     async def _download_file(self, url: str) -> str:
         """Downloads a file if not already downloaded and returns the local relative path."""
-        if not url or not url.startswith("http"):
+        if not url:
             return url
-            
+
         if url in self.downloaded_urls:
             return self.downloaded_urls[url]
-            
+
+        # Handle local relative or absolute files from frontend public/build
+        if not url.startswith("http"):
+            clean_rel = url.lstrip("/").lstrip("./")
+            import shutil
+            for candidate in [
+                Path("v:/Varsha/frontend/public") / clean_rel,
+                Path("v:/Varsha/frontend/build") / clean_rel,
+                self.workspace_path / clean_rel
+            ]:
+                if candidate.exists() and candidate.is_file():
+                    local_filename = f"{uuid.uuid4().hex[:6]}_{candidate.name}"
+                    target = self.assets_media_dir / local_filename
+                    try:
+                        shutil.copy2(candidate, target)
+                        rel_path = f"./assets/media/{local_filename}"
+                        self.downloaded_urls[url] = rel_path
+                        return rel_path
+                    except Exception as e:
+                        print(f"Failed to copy local asset {candidate}: {e}")
+            return url
+
         parsed_url = urlparse(url)
         filename = os.path.basename(parsed_url.path)
         if not filename:
@@ -27,6 +48,8 @@ class AssetCollector:
             
         # Truncate filename to prevent Windows MAX_PATH errors (keep extension)
         name, ext = os.path.splitext(filename)
+        if not ext:
+            ext = ".mp4" if "video" in url.lower() else ".jpg"
         if len(name) > 40:
             name = name[:40]
         filename = f"{name}{ext}"
@@ -37,7 +60,7 @@ class AssetCollector:
         
         try:
             async with httpx.AsyncClient(verify=False, follow_redirects=True) as client:
-                response = await client.get(url, timeout=30.0)
+                response = await client.get(url, timeout=120.0)
                 if response.status_code == 200:
                     with open(local_path, "wb") as f:
                         f.write(response.content)
