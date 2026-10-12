@@ -94,14 +94,18 @@ async def register_with_secret_code(
         )
 
     # 3. Determine approval status
+    #    - wisher is auto-approved
     #    - org_admin signs up pending, must be approved by super admin
-    #    - wisher / bday_person sign up pending, must be approved by org admin
+    #    - bday_person signs up pending, must be approved by org admin
     #    - EXCEPTION: bday_person signing up ON their birthday is auto-approved
     effective_role = data.role.value  # wisher | bday_person | org_admin
     initial_approval = "pending"
     initial_status = UserStatus.pending_approval
 
-    if data.role == MemberRole.bday_person and data.date_of_birth:
+    if data.role == MemberRole.wisher:
+        initial_approval = "approved"
+        initial_status = UserStatus.active
+    elif data.role == MemberRole.bday_person and data.date_of_birth:
         today = date.today()
         dob = data.date_of_birth
         if dob.month == today.month and dob.day == today.day:
@@ -120,13 +124,17 @@ async def register_with_secret_code(
     if not user:
         raise HTTPException(status_code=400, detail="Registration failed")
 
-    # 5. Store date_of_birth on profile
+    # 5. Store date_of_birth on profile and ensure initial approval status is saved
+    profile_update = {
+        "approval_status": initial_approval,
+        "status": initial_status.value,
+    }
     if data.date_of_birth:
-        supabase.from_('profiles').update({
-            "date_of_birth": data.date_of_birth.isoformat(),
-            "approval_status": initial_approval,
-            "status": initial_status.value,
-        }).eq('id', str(user.id)).execute()
+        profile_update["date_of_birth"] = data.date_of_birth.isoformat()
+    try:
+        supabase.from_('profiles').update(profile_update).eq('id', str(user.id)).execute()
+    except Exception as e:
+        print(f"Error updating profile with approval status: {e}")
 
     # 6. Add the user to this organization and verify it was persisted. The
     # approval queues operate on organization_members, so returning success
@@ -156,6 +164,28 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Use effective role resolved during authentication
+    role_slug = user.role_slug or "viewer"
+
+    # Auto-approval for wishers alone on login
+    if role_slug == "wisher":
+        if user.approval_status != 'approved':
+            user.approval_status = 'approved'
+            try:
+                from app.services.organization_service import _connection
+                with _connection() as conn, conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE profiles SET approval_status = 'approved', status = 'active' WHERE id = %s",
+                        (str(user.id),)
+                    )
+                    conn.commit()
+                supabase.from_('profiles').update({
+                    'approval_status': 'approved',
+                    'status': 'active'
+                }).eq('id', str(user.id)).execute()
+            except Exception as e:
+                print(f"Error auto-approving wisher profile on login: {e}")
+
     if user.approval_status == 'pending':
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -166,9 +196,6 @@ async def login_for_access_token(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Your account request was rejected. Reason: {user.rejection_reason or 'No reason provided.'}"
         )
-
-    # Use effective role resolved during authentication
-    role_slug = user.role_slug or "viewer"
 
     # Permanent token for super_admin/org_admin, timed token for everyone else
     is_permanent = role_slug in ("super_admin", "super_admin", "org_admin")
