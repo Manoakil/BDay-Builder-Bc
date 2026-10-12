@@ -253,7 +253,9 @@ async def get_all_global_members() -> List[dict]:
                 JOIN profiles p ON om.user_id = p.id
                 JOIN organizations o ON om.organization_id = o.id
                 WHERE om.deleted_at IS NULL
-                ORDER BY p.created_at DESC
+                ORDER BY 
+                    CASE WHEN p.approval_status = 'pending' OR p.approval_status IS NULL OR p.approval_status = 'unapproved' THEN 0 ELSE 1 END,
+                    p.created_at DESC
             """)
             return [dict(row) for row in cursor.fetchall()]
     except Exception as e:
@@ -398,6 +400,15 @@ async def get_org_members_with_profiles(org_id: UUID) -> List[dict]:
                 "date_of_birth": p.get("date_of_birth"),
                 "rejection_reason": p.get("rejection_reason")
             })
+
+        # Sort so pending / unapproved members appear at the top
+        def _member_sort_key(item):
+            status = (item.get("approval_status") or "pending").lower()
+            is_pending = 0 if status in ("pending", "unapproved") else 1
+            joined = item.get("joined_at") or ""
+            return (is_pending, joined)
+
+        results.sort(key=_member_sort_key)
         return results
     except Exception as e:
         print(f"Error fetching org members with profiles: {e}")
@@ -519,8 +530,29 @@ async def set_member_approval(
             )
             row = cursor.fetchone()
             connection.commit()
+
+            # Also sync with Supabase REST client to ensure consistency
+            try:
+                from supabase import create_client
+                supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_STORAGE_SERVICE_ROLE_KEY)
+                supabase.from_('profiles').update({
+                    'approval_status': 'approved' if decision == 'approved' else 'rejected',
+                    'status': 'active' if decision == 'approved' else 'suspended',
+                    'approved_at': now,
+                    'approved_by': str(approver_id),
+                }).eq('id', str(user_id)).execute()
+            except Exception as se:
+                print(f"Supabase REST sync notice: {se}")
+
             if row:
                 return dict(row)
+            cursor.execute(
+                """SELECT id, full_name, email, approval_status, status FROM profiles WHERE id = %s""",
+                (str(user_id),),
+            )
+            prof = cursor.fetchone()
+            if prof:
+                return dict(prof)
         return None
     except Exception as e:
         print(f"Error setting member approval: {e}")
