@@ -49,3 +49,23 @@ async def get_current_user(
     except Exception as e:
         print(f"Error in user existence check: {e}")
         raise credentials_exception
+
+
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
+
+async def get_optional_current_user(
+    token: str | None = Depends(oauth2_scheme_optional)
+) -> Any | None:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.ALGORITHM],
+            options={"verify_exp": False}
+        )
+        user_id: str = payload.get("sub")
+        if not user_id:
+            return None
+        return SimpleNamespace(id=UUID(user_id), role=payload.get("role"))
+    except Exception:
+        return None

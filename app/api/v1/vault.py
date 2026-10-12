@@ -12,7 +12,7 @@ from app.services import event_service
 from app.services import organization_service
 from app.services import vault_service
 from app.services import wish_service
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, get_optional_current_user
 from app.utils.security import verify_hash
 
 router = APIRouter()
@@ -22,7 +22,6 @@ async def _require_revealed_birthday_event(supabase: Client, current_user: Any, 
     event = await event_service.get_event_by_id(supabase, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    # For now, allow any authenticated user (like the vault wisher) to view the vault
     return event
 
 
@@ -51,6 +50,59 @@ async def create_secret_vault(
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Secret Vault creation failed: {str(e)}")
+
+
+@router.get("/lookup/{identifier}")
+async def lookup_secret_vault(
+    identifier: str,
+    supabase: Client = Depends(get_supabase_client),
+    current_user: Any = Depends(get_optional_current_user)
+) -> Any:
+    """Flexible lookup allowing resolution by vault_id, event_id, or organization_id."""
+    clean_id = identifier.strip()
+    
+    # 1. Try as vault ID
+    try:
+        vault_uuid = UUID(clean_id)
+        vault = await vault_service.get_secret_vault_by_id(supabase, vault_uuid)
+        if vault:
+            event = await event_service.get_event_by_id(supabase, vault.event_id)
+            return {
+                "vault": SecretVaultPublic.model_validate(vault.model_dump(exclude={"answer_hash"})),
+                "event": event.model_dump(mode="json") if event else None
+            }
+    except ValueError:
+        pass
+
+    # 2. Try as event ID
+    try:
+        event_uuid = UUID(clean_id)
+        vault = await vault_service.get_secret_vault_by_event_id(supabase, event_uuid)
+        if vault:
+            event = await event_service.get_event_by_id(supabase, event_uuid)
+            return {
+                "vault": SecretVaultPublic.model_validate(vault.model_dump(exclude={"answer_hash"})),
+                "event": event.model_dump(mode="json") if event else None
+            }
+    except ValueError:
+        pass
+
+    # 3. Try as organization ID
+    try:
+        org_uuid = UUID(clean_id)
+        evt_resp = supabase.from_('events').select('*').eq('organization_id', str(org_uuid)).neq('status', 'archived').order('created_at', desc=True).limit(1).execute()
+        if evt_resp.data and len(evt_resp.data) > 0:
+            event_id = UUID(evt_resp.data[0]['id'])
+            vault = await vault_service.get_secret_vault_by_event_id(supabase, event_id)
+            if vault:
+                return {
+                    "vault": SecretVaultPublic.model_validate(vault.model_dump(exclude={"answer_hash"})),
+                    "event": evt_resp.data[0]
+                }
+    except ValueError:
+        pass
+
+    raise HTTPException(status_code=404, detail="Secret Vault not found")
 
 
 @router.get("/{event_id}/manage", response_model=SecretVault)
@@ -91,10 +143,12 @@ async def update_secret_vault(
 async def get_secret_vault_for_event(
     event_id: UUID,
     supabase: Client = Depends(get_supabase_client),
-    current_user: Any = Depends(get_current_user) # Optional auth
+    current_user: Any = Depends(get_optional_current_user) # Optional auth
 ) -> Any:
-    await _require_revealed_birthday_event(supabase, current_user, event_id)
     vault = await vault_service.get_secret_vault_by_event_id(supabase, event_id)
+    if not vault:
+        # Also check if event_id is a vault_id
+        vault = await vault_service.get_secret_vault_by_id(supabase, event_id)
     if not vault:
         raise HTTPException(status_code=404, detail="Secret Vault not found for this event")
     if not vault.is_enabled:
@@ -106,7 +160,7 @@ async def attempt_secret_vault(
     vault_id: UUID,
     attempt_in: VaultAttemptCreate,
     supabase: Client = Depends(get_supabase_client),
-    current_user: Any = Depends(get_current_user) # Can be None for guest attempts
+    current_user: Any = Depends(get_optional_current_user) # Can be None for guest attempts
 ) -> Any:
     vault = await vault_service.get_secret_vault_by_id(supabase, vault_id)
     if not vault:
