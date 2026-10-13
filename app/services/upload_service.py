@@ -89,3 +89,76 @@ async def upload_file(
     except Exception as e:
         print(f"Error uploading file: {e}")
         return None
+
+def create_presigned_upload(
+    supabase: Client,
+    bucket_name: StorageBucket,
+    filename: str,
+    user_id: UUID
+) -> dict:
+    import re
+    upload_client = (
+        create_client(settings.SUPABASE_URL, settings.SUPABASE_STORAGE_SERVICE_ROLE_KEY)
+        if settings.SUPABASE_STORAGE_SERVICE_ROLE_KEY else supabase
+    )
+    safe_filename = re.sub(r'[^a-zA-Z0-9.\-_]', '_', filename) if filename else "file"
+    file_path = f"{user_id}/{uuid.uuid4()}-{safe_filename}"
+    
+    # Ensure bucket exists
+    try:
+        upload_client.storage.get_bucket(bucket_name.value)
+    except Exception:
+        try:
+            upload_client.storage.create_bucket(bucket_name.value, options={"public": True})
+        except Exception:
+            pass
+
+    res = upload_client.storage.from_(bucket_name.value).create_signed_upload_url(file_path)
+    signed_url = res.get('signed_url') or res.get('signedUrl')
+    return {
+        "signed_url": signed_url,
+        "path": file_path,
+        "bucket": bucket_name.value
+    }
+
+async def complete_direct_upload(
+    supabase: Client,
+    bucket_name: StorageBucket,
+    file_path: str,
+    filename: str,
+    content_type: Optional[str],
+    size_bytes: Optional[int],
+    user_id: UUID,
+    organization_id: Optional[UUID] = None,
+    event_id: Optional[UUID] = None
+) -> Optional[File]:
+    try:
+        upload_client = (
+            create_client(settings.SUPABASE_URL, settings.SUPABASE_STORAGE_SERVICE_ROLE_KEY)
+            if settings.SUPABASE_STORAGE_SERVICE_ROLE_KEY else supabase
+        )
+        public_url = upload_client.storage.from_(bucket_name.value).get_public_url(file_path)
+        file_type = content_type.split('/')[0] if content_type else 'other'
+        
+        file_data = FileCreate(
+            organization_id=organization_id,
+            event_id=event_id,
+            bucket=bucket_name,
+            path=file_path,
+            filename=filename,
+            original_name=filename,
+            mime_type=content_type,
+            size_bytes=size_bytes,
+            file_type=file_type,
+            is_public=bucket_name.value in PUBLIC_MEDIA_BUCKETS,
+            uploaded_by=user_id,
+            metadata={"public_url": public_url}
+        )
+        db_response = upload_client.from_('files').insert(file_data.model_dump(mode='json')).execute()
+        if db_response.data:
+            return File.model_validate(db_response.data[0])
+        return None
+    except Exception as e:
+        print(f"Error completing direct upload: {e}")
+        return None
+

@@ -52,3 +52,26 @@ class File(FileBase):
 
     class Config:
         from_attributes = True
+
+class PresignedUploadRequest(BaseModel):
+    filename: str
+    content_type: Optional[str] = "application/octet-stream"
+    size_bytes: Optional[int] = None
+    organization_id: Optional[UUID] = None
+    event_id: Optional[UUID] = None
+
+class PresignedUploadResponse(BaseModel):
+    signed_url: str
+    path: str
+    bucket: str
+
+class CompleteUploadRequest(BaseModel):
+    bucket: StorageBucket
+    path: str
+    filename: str
+    original_name: Optional[str] = None
+    content_type: Optional[str] = None
+    size_bytes: Optional[int] = None
+    organization_id: Optional[UUID] = None
+    event_id: Optional[UUID] = None
+
