@@ -75,7 +75,7 @@ async def upload_file(
                 filename=file.filename,
                 original_name=file.filename,
                 mime_type=file.content_type,
-                size_bytes=file.size,
+                size_bytes=len(file_content) if file_content is not None else file.size,
                 file_type=file.content_type.split('/')[0] if file.content_type else 'other',
                 is_public=bucket_name.value in PUBLIC_MEDIA_BUCKETS,
                 uploaded_by=user_id,
