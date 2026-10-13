@@ -33,7 +33,10 @@ def _reveal_time(event: Event) -> datetime:
 
 
 def _is_birthday_person(current_user: Any) -> bool:
-    return getattr(current_user, "role", None) in ("bday_person", "birthday_person", "bday-person", "org_admin", "admin", "super_admin")
+    return getattr(current_user, "role", None) in (
+        "bday_person", "birthday_person", "bday-person",
+        "org_admin", "org-admin", "admin", "super_admin", "super-admin", "wisher"
+    )
 
 
 def require_organization_manager(user_id: UUID, organization_id: UUID) -> None:
@@ -52,11 +55,14 @@ async def get_my_birthday_event(
     supabase: Client = Depends(get_supabase_client),
     current_user: Any = Depends(get_current_user)
 ) -> Any:
-    """Return the current published event for admins or the birthday person."""
+    """Return the current published event for admins, wishers, or the birthday person."""
     role = getattr(current_user, "role_slug", getattr(current_user, "role", "")) or ""
     
-    if role not in ("org_admin", "super_admin", "super-admin", "superadmin", "admin", "bday_person", "birthday_person", "bday-person"):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This page is only available to admins or the birthday person")
+    if role not in (
+        "org_admin", "org-admin", "super_admin", "super-admin", "superadmin", "admin",
+        "bday_person", "birthday_person", "bday-person", "wisher"
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This page is only available to admins, wishers, or the birthday person")
 
     # Fetch organizations the user belongs to
     org_query = supabase.from_('organization_members').select('organization_id').eq('user_id', str(current_user.id)).is_('deleted_at', 'null')
