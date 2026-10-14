@@ -20,6 +20,8 @@ class TimelineBase(BaseModel):
     # Derived from the attached files row when timeline entries are read.
     media_url: Optional[str] = None
     media_mime_type: Optional[str] = None
+    wisher_name: Optional[str] = None
+    created_by_name: Optional[str] = None
 
 class TimelineCreate(TimelineBase):
     pass
