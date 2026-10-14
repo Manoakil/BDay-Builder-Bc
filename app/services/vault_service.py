@@ -8,10 +8,12 @@ from app.schemas.vault import SecretVault, SecretVaultCreate, SecretVaultUpdate,
 from app.utils.security import get_password_hash # Assuming get_password_hash is used for vault answers
 
 async def create_secret_vault(supabase: Client, vault_in: SecretVaultCreate) -> Optional[SecretVault]:
-    # If a vault already exists for this event, return it idempotently
+    # If a vault already exists for this event, update it idempotently with incoming data
     existing = await get_secret_vault_by_event_id(supabase, vault_in.event_id)
     if existing:
-        return existing
+        update_data = SecretVaultUpdate(**vault_in.model_dump(exclude_unset=True))
+        updated = await update_secret_vault(supabase, existing.id, update_data)
+        return updated or existing
 
     try:
         # Hash the answer before storing it

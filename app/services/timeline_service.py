@@ -132,7 +132,7 @@ async def get_timeline_entry_by_id(supabase: Client, timeline_entry_id: UUID) ->
 async def update_timeline_entry(supabase: Client, timeline_entry_id: UUID, timeline_in: TimelineUpdate) -> Optional[Timeline]:
     try:
         with _connection() as connection, connection.cursor(cursor_factory=RealDictCursor) as cursor:
-            data = timeline_in.model_dump(mode='json', exclude_unset=True, exclude_none=True)
+            data = timeline_in.model_dump(mode='json', exclude_unset=True)
             for non_col in ('media_url', 'media_mime_type', 'wisher_name', 'created_by_name'):
                 data.pop(non_col, None)
             if not data:
